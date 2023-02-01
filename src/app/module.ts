@@ -6,6 +6,7 @@ import { Estate } from 'src/estate/entity';
 import { Stats } from 'src/stats/entity';
 import { StatsController } from 'src/stats/controller';
 import { StatsModule } from 'src/stats/module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
 	imports: [
@@ -22,6 +23,7 @@ import { StatsModule } from 'src/stats/module';
 			],
 			synchronize: true,
 		}),
+		ScheduleModule.forRoot(),
 		CrawlerModule,
 		StatsModule
 	],

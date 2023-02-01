@@ -12,6 +12,12 @@ export class Stats {
 	@Column()
 	count: number
 
+	@Column({ type: 'float' })
+	avg_price: number
+
+	@Column({ type: 'float' })
+	avg_per_meter: number
+
 	@Column({ type: 'timestamp' })
 	updated_at: Date
 }

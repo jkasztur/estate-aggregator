@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { timeStamp } from "console";
+import moment from "moment";
 import { EstateService } from "src/estate/service";
-import { Repository } from "typeorm";
+import { LessThan, MoreThan, Repository } from "typeorm";
 import { Stats } from "./entity";
 
 @Injectable()
@@ -16,38 +18,55 @@ export class StatsService {
 	) { }
 
 	async createStats(timestamp: Date) {
+		if (await this.statsExistToday()) {
+			this.logger.log('Skip creating stats')
+			return
+		}
 		this.logger.log('Creating stats')
 		for (const type of ['2+1', '2+kk', '3+1', '3+kk']) {
-			const count = await this.estateService.getCount(type, timestamp)
+			// TODO: optimize
 			const stats: Stats = new Stats()
 			stats.updated_at = timestamp
-			stats.count = count
+			stats.count = await this.estateService.getCount(type, timestamp)
 			stats.type = type
+			stats.avg_price = await this.estateService.getAvg(type, 'price', timestamp)
+			stats.avg_per_meter = await this.estateService.getAvg(type, 'per_meter', timestamp)
 			await this.repository.save(stats)
-
 		}
 		this.logger.log('Finished stats')
 	}
 
-	async getStats(): Promise<FetchedStats> {
+	statsExistToday(): Promise<boolean> {
+		return this.repository.exist({
+			where: {
+				updated_at: MoreThan(moment().startOf('day').toDate())
+			}
+		})
+	}
+
+	async getStats() {
 		const stats = await this.repository.find({
 			order: {
 				updated_at: 'ASC'
 			}
 		})
-		return stats.reduce<FetchedStats>((prev, current) => {
+		const reduced = stats.reduce<FetchedStats>((prev, current) => {
 			const { type, count, updated_at } = current
-			if (!prev[type]) {
-				prev[type] = {}
+			const date = updated_at.toISOString()
+			if (!prev[date]) {
+				prev[date] = {
+					date: date
+				}
 			}
-			prev[type][updated_at.toISOString()] = count
+			prev[date][type] = count
 			return prev
 		}, {})
+		return Object.values(reduced)
 	}
 }
 
 type FetchedStats = {
-	[type: string]: IndividualStats
+	[date: string]: IndividualStats
 }
 
-type IndividualStats = Record<string, number>
+type IndividualStats = Record<string, number | string>

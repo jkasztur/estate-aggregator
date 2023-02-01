@@ -9,7 +9,7 @@ const params = {
 	category_type_cb: 1, // prodej
 	locality_region_id: 14, // JM kraj
 	locality_district_id: 72, // Brno
-	per_page: 500
+	per_page: 100
 }
 
 @Injectable()
@@ -25,6 +25,7 @@ export class Crawler {
 	) {
 		this.client = axios.create({
 			baseURL: 'https://www.sreality.cz',
+			validateStatus: (status) => [200, 503].includes(status)
 		})
 	}
 
@@ -52,6 +53,9 @@ export class Crawler {
 					tms: new Date().getTime()
 				}
 			})
+			if (results.status === 503) {
+				this.logger.log(`Sreality unavailable: ${results.data}`)
+			}
 			const items: Estate[] = (await Promise.all<Estate>(results.data._embedded.estates.map(item => this.getDetail(item))))
 				.filter(item => !!item)
 				.map(item => {
@@ -66,6 +70,8 @@ export class Crawler {
 		}
 		this.logger.log(`Found ${totalFound} estates`)
 		this.logger.log(`Added ${totalAdded} new estates to DB`)
+		const deleteResult = await this.estateService.removeDeleted(updatedAt)
+		this.logger.log(`Deleted ${deleteResult.affected} estates from DB`)
 		await this.statsService.createStats(updatedAt)
 		return { totalFound, totalAdded }
 	}
@@ -73,11 +79,16 @@ export class Crawler {
 	private async getDetail(rawItem: any): Promise<Estate> {
 		const estate: Estate = this.mapItem(rawItem)
 		if (!estate) return null
-		const result = await this.client.get(`/api/cs/v2/estates/${estate.id}`, {
-			params: {
-				tms: new Date().getTime()
-			}
-		})
+		let result
+		try {
+			result = await this.client.get(`/api/cs/v2/estates/${estate.id}`, {
+				params: {
+					tms: new Date().getTime()
+				}
+			})
+		} catch (err) {
+			return null
+		}
 		const attributes = result.data.items.filter(attribute => attribute.type === 'string'
 			|| attribute.type === 'number'
 			|| attribute.type === 'boolean')

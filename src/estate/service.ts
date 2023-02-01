@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { LessThan, Repository } from "typeorm";
 import { Estate } from "./entity";
 
 @Injectable()
@@ -41,6 +41,22 @@ export class EstateService {
 				type,
 				updated_at
 			}
+		})
+	}
+
+	async getAvg(type: string, field: keyof Estate, updated_at: Date): Promise<number> {
+		const queryBuilder = this.repository.createQueryBuilder()
+		queryBuilder.select(`AVG(${field})`, 'avgPrice').where({
+			type,
+			updated_at
+		})
+		const response = await queryBuilder.getRawOne()
+		return response.avgPrice
+	}
+
+	async removeDeleted(olderThan: Date) {
+		return this.repository.delete({
+			updated_at: LessThan(olderThan)
 		})
 	}
 }
